@@ -1,4 +1,4 @@
-# backend/database.py
+# src/database.py
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
