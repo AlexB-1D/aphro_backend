@@ -1,0 +1,23 @@
+# Framework principal
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+
+# MongoDB (async)
+motor==3.7.1
+pymongo==4.10.1
+
+# Authentification / Sécurité
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+pyjwt==2.10.1
+
+# Notifications (Firebase)
+firebase-admin==6.6.0
+
+# Limiteur de rate requests
+slowapi==0.1.9
+
+# Outils utiles
+python-multipart==0.0.18  # pour gérer les formulaires / uploads
+pydantic==2.9.2           # gestion des schémas
