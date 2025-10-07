@@ -96,7 +96,7 @@ app.add_middleware(RateLimiterMiddleware)
 
 origins = [
     "http://localhost:5173",
-    "https://aphro-1liw.onrender.com/",
+    "https://aphro-1liw.onrender.com",
 ]
 
 app.add_middleware(
@@ -112,25 +112,17 @@ async def root():
     return {"message": "Hello, Aphro!"}
 
 # -------------------
-# Endpoints utilisateurs
+# Utilisateurs
 # -------------------
-@app.post("/users/", response_model=schemas.UserProfile)
+@app.post("/users/", response_model=schemas.UserResponse)
 async def create_user_endpoint(user: schemas.UserCreate):
     existing = await crud.get_user_by_username(user.username)
     if existing:
         raise HTTPException(status_code=400, detail="Utilisateur déjà existant")
-
-    hashed_password = auth.hash_password(user.password)
     user_dict = user.model_dump()
-    user_dict["password"] = hashed_password
-
+    user_dict["password"] = auth.hash_password(user.password)
     new_user = await crud.create_user(user_dict)
-    return {
-        "id": str(new_user["_id"]),
-        "username": new_user["username"],
-        "gender": new_user["gender"],
-        "email": new_user.get("email", "")
-    }
+    return {"id": str(new_user["_id"]), "username": new_user["username"], "gender": new_user["gender"]}
 
 @app.post("/login/", response_model=schemas.Token)
 async def login(username: str, password: str):
@@ -142,17 +134,7 @@ async def login(username: str, password: str):
     refresh_token = auth.create_refresh_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=auth.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    await tokens_collection.insert_one({
-        "user_id": str(user["_id"]),
-        "refresh_token": refresh_token,
-        "expires_at": expires_at
-    })
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 @app.post("/refresh/", response_model=schemas.Token)
 async def refresh_token(old_refresh_token: str):
