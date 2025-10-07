@@ -1,7 +1,7 @@
 # crud.py
 from bson import ObjectId
-from src.database import users_collection, likes_collection, tokens_collection
-from src.schemas import UserProfile
+from .database import users_collection, likes_collection, tokens_collection
+from .schemas import UserProfile
 from datetime import datetime, timezone
 import math
 

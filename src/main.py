@@ -7,10 +7,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import asyncio, time
 
-from src import crud, schemas, auth
-from src.database import users_collection, likes_collection, tokens_collection, messages_collection, device_tokens_collection
-from src.chat import websocket_endpoint, manager
-from src.notifications import send_push_notification
+from . import crud, schemas, auth
+from .database import users_collection, likes_collection, tokens_collection, messages_collection, device_tokens_collection
+from .chat import websocket_endpoint, manager
+from .notifications import send_push_notification
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
