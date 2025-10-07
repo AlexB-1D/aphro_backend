@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from bson import ObjectId
 
-from src.database import users_collection
+from .database import users_collection
 
 # -------------------------
 # Configuration (env vars)

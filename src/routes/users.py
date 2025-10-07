@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from src.auth import get_current_user
-from src.database import users_collection
-from src.models import User
+from ..auth import get_current_user
+from ..database import users_collection
+from ..models import User
 from bson import ObjectId
 
 router = APIRouter(prefix="/users", tags=["users"])

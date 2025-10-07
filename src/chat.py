@@ -1,9 +1,9 @@
 # chat.py
 import asyncio, datetime
 from fastapi import WebSocket, WebSocketDisconnect
-from src.database import messages_collection, device_tokens_collection
-from src import crud
-from src.notifications import send_push_notification
+from .database import messages_collection, device_tokens_collection
+from . import crud
+from .notifications import send_push_notification
 
 class ConnectionManager:
     def __init__(self):
