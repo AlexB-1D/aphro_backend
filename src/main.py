@@ -114,22 +114,20 @@ async def root():
 # -------------------
 # Utilisateurs
 # -------------------
-@app.post("/users/", response_model=schemas.UserResponse)
+@app.post("/users/")
 async def create_user_endpoint(user: schemas.UserCreate):
-    # validation simple côté serveur
-    print("CREATE_USER received:", user.model_dump())
-    if not isinstance(user.password, str) or user.password.strip() == "":
+    if not user.password or not isinstance(user.password, str):
         raise HTTPException(status_code=400, detail="Password must be a non-empty string")
-    if len(user.password) > 100:
-        # inutile d'autoriser des chaînes déraisonnables
-        raise HTTPException(status_code=400, detail="Password too long")
-    existing = await crud.get_user_by_username(user.username)
-    if existing:
-        raise HTTPException(status_code=400, detail="Utilisateur déjà existant")
+    if len(user.password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=400, detail="Password too long (max 72 bytes)")
+
+    # Hash safely
     user_dict = user.model_dump()
     user_dict["password"] = auth.hash_password(user.password)
+
     new_user = await crud.create_user(user_dict)
-    return {"id": str(new_user["_id"]), "username": new_user["username"], "gender": new_user["gender"]}
+    return {"id": str(new_user["_id"]), "username": new_user["username"]}
+
 
 @app.post("/login/", response_model=schemas.Token)
 async def login(username: str, password: str):

@@ -26,41 +26,35 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))   
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ---- helpers for bcrypt 72-bytes limit ----
-def _normalize_password_for_bcrypt(password) -> str:
+def hash_password(password) -> str:
     """
-    Ensure we pass an UTF-8 string truncated to 72 bytes for bcrypt.
-    Accepts str or other types (coerces to str).
+    Safe hashing: ensures string, truncates to 72 bytes for bcrypt
     """
     if password is None:
-        raise ValueError("Password is required")
-    # coerce to str (covers accidental objects)
+        raise HTTPException(status_code=400, detail="Password required")
+
+    print("Password received:", repr(password))
+
+    # Convert to str if needed
     if not isinstance(password, str):
         password = str(password)
-    # encode -> take first 72 bytes -> decode while ignoring partial char
+    
+    # Truncate to 72 bytes for bcrypt
     b = password.encode("utf-8")
     if len(b) > 72:
-        truncated = b[:72].decode("utf-8", "ignore")
-        return truncated
-    return password
+        password = b[:72].decode("utf-8", "ignore")
+    
+    return pwd_context.hash(password)
 
-def hash_password(password: str) -> str:
-    """
-    Hash password safely with bcrypt truncation rule handled.
-    """
-    try:
-        normalized = _normalize_password_for_bcrypt(password)
-        return pwd_context.hash(normalized)
-    except Exception as e:
-        # raise a HTTPException so the endpoint can give a readable 400/500
-        raise HTTPException(status_code=500, detail=f"Error hashing password: {e}")
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        normalized = _normalize_password_for_bcrypt(plain_password)
-        return pwd_context.verify(normalized, hashed_password)
-    except Exception:
-        return False
+def verify_password(plain_password, hashed_password) -> bool:
+    if not isinstance(plain_password, str):
+        plain_password = str(plain_password)
+    b = plain_password.encode("utf-8")
+    if len(b) > 72:
+        plain_password = b[:72].decode("utf-8", "ignore")
+    return pwd_context.verify(plain_password, hashed_password)
+
 
 # -------------------------
 # OAuth2 scheme (docs)
