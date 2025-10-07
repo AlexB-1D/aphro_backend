@@ -24,6 +24,13 @@ async def update_profile(user_id: str, data: dict):
         {"$set": data}
     )
     return await get_profile(user_id)
+
+async def get_user_by_username(username: str):
+    return await users_collection.find_one({"username": username})
+
+async def get_user_by_email(email: str):
+    return await users_collection.find_one({"email": email})
+
 # -------------------
 # Localisation
 # -------------------
