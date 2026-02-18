@@ -7,10 +7,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import asyncio, time
 
-from src import crud, schemas, auth
-from src.database import users_collection, likes_collection, tokens_collection, messages_collection, device_tokens_collection
-from src.chat import websocket_endpoint, manager
-from src.notifications import send_push_notification
+from . import crud, schemas, auth
+from .database import users_collection, likes_collection, tokens_collection, messages_collection, device_tokens_collection
+from .chat import websocket_endpoint, manager
+from .notifications import send_push_notification
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -55,7 +55,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 async def lifespan(app: FastAPI):
     await crud.create_location_index()
 
-    # Scheduler des croisements
     async def crossing_scheduler():
         while True:
             try:
@@ -66,12 +65,11 @@ async def lifespan(app: FastAPI):
                 print(f"[Crossing Scheduler] Erreur : {e}")
             await asyncio.sleep(60)
 
-    # Scheduler cleanup tokens expirés
     async def cleanup_scheduler():
         while True:
             now = datetime.now(timezone.utc)
             await tokens_collection.delete_many({"expires_at": {"$lt": now}})
-            await asyncio.sleep(3600)  # toutes les heures
+            await asyncio.sleep(3600)
 
     task_crossing = asyncio.create_task(crossing_scheduler())
     task_cleanup = asyncio.create_task(cleanup_scheduler())
@@ -97,37 +95,41 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(RateLimiterMiddleware)
 
 origins = [
-    "http://localhost:5173",  # ton frontend en dev
-    "https://ton-frontend-distant.com",  # ajoute ton frontend deployé ici
+    "http://localhost:5173",
+    "https://aphro-1liw.onrender.com",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,   # les domaines autorisés
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],     # autorise GET, POST, PUT, DELETE…
-    allow_headers=["*"],     # autorise tous les headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
 
 @app.get("/")
 async def root():
     return {"message": "Hello, Aphro!"}
 
 # -------------------
-# Endpoints utilisateurs
+# Utilisateurs
 # -------------------
 @app.post("/users/")
 async def create_user_endpoint(user: schemas.UserCreate):
-    existing = await crud.get_user_by_username(user.username)
-    if existing:
-        raise HTTPException(status_code=400, detail="Utilisateur déjà existant")
+    if not user.password or not isinstance(user.password, str):
+        raise HTTPException(status_code=400, detail="Password must be a non-empty string")
+    if len(user.password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=400, detail="Password too long (max 72 bytes)")
+
+    # Hash safely
     user_dict = user.model_dump()
     user_dict["password"] = auth.hash_password(user.password)
-    new_user = await crud.create_user(user_dict)
-    return {"id": str(new_user["_id"]), "username": new_user["username"], "gender": new_user["gender"]}
 
-@app.post("/login/")
+    new_user = await crud.create_user(user_dict)
+    return {"id": str(new_user["_id"]), "username": new_user["username"]}
+
+
+@app.post("/login/", response_model=schemas.Token)
 async def login(username: str, password: str):
     user = await crud.get_user_by_username(username)
     if not user or not auth.verify_password(password, user["password"]):
@@ -137,30 +139,31 @@ async def login(username: str, password: str):
     refresh_token = auth.create_refresh_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=auth.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    await tokens_collection.insert_one({
-        "user_id": str(user["_id"]),
-        "refresh_token": refresh_token,
-        "expires_at": expires_at
-    })
-
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
-# -------------------
-# Refresh / Logout
-# -------------------
-@app.post("/refresh/")
+@app.post("/refresh/", response_model=schemas.Token)
 async def refresh_token(old_refresh_token: str):
     token_doc = await tokens_collection.find_one({"refresh_token": old_refresh_token})
     if not token_doc or token_doc["expires_at"] < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Refresh token invalide ou expiré")
+
     user_id = token_doc["user_id"]
     await tokens_collection.delete_one({"refresh_token": old_refresh_token})
 
     new_refresh_token = auth.create_refresh_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=auth.REFRESH_TOKEN_EXPIRE_DAYS)
-    await tokens_collection.insert_one({"user_id": user_id, "refresh_token": new_refresh_token, "expires_at": expires_at})
+    await tokens_collection.insert_one({
+        "user_id": user_id,
+        "refresh_token": new_refresh_token,
+        "expires_at": expires_at
+    })
     access_token = auth.create_access_token({"user_id": user_id})
-    return {"access_token": access_token, "refresh_token": new_refresh_token, "token_type": "bearer"}
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer"
+    }
 
 @app.post("/logout/")
 async def logout(refresh_token: str):

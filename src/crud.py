@@ -1,6 +1,7 @@
 # crud.py
 from bson import ObjectId
-from src.database import users_collection, likes_collection, tokens_collection
+from .database import users_collection, likes_collection, tokens_collection
+from .schemas import UserProfile
 from datetime import datetime, timezone
 import math
 
@@ -11,11 +12,24 @@ async def create_user(user_dict):
     result = await users_collection.insert_one(user_dict)
     return await users_collection.find_one({"_id": result.inserted_id})
 
+async def get_profile(user_id: str):
+    profile = await users_collection.find_one({"_id": ObjectId(user_id)})
+    if profile:
+        profile["_id"] = str(profile["_id"])
+    return profile
+
+async def update_profile(user_id: str, data: dict):
+    await users_collection.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": data}
+    )
+    return await get_profile(user_id)
+
 async def get_user_by_username(username: str):
     return await users_collection.find_one({"username": username})
 
-async def get_user(user_id: str):
-    return await users_collection.find_one({"_id": ObjectId(user_id)})
+async def get_user_by_email(email: str):
+    return await users_collection.find_one({"email": email})
 
 # -------------------
 # Localisation
@@ -33,24 +47,23 @@ async def create_location_index():
 # -------------------
 # Nearby Users
 # -------------------
-async def get_nearby_users(user_id: str, max_distance_m=100):
-    user = await get_user(user_id)
-    if not user or "location" not in user:
+async def get_nearby_users(user_id: str, max_distance_km=10):
+    current_user = await get_profile(user_id)
+    if not current_user or not current_user.get("latitude") or not current_user.get("longitude"):
         return []
 
-    user_lng, user_lat = user["location"]["coordinates"]
+    lat, lon = current_user["latitude"], current_user["longitude"]
+    nearby = users_collection.find({
+        "_id": {"$ne": ObjectId(user_id)},
+        "latitude": {"$gte": lat - 0.1, "$lte": lat + 0.1},
+        "longitude": {"$gte": lon - 0.1, "$lte": lon + 0.1},
+    })
 
-    nearby = await users_collection.find({
-        "location": {
-            "$near": {
-                "$geometry": {"type": "Point", "coordinates": [user_lng, user_lat]},
-                "$maxDistance": max_distance_m
-            }
-        },
-        "_id": {"$ne": ObjectId(user_id)}
-    }).to_list(20)  # limite 20 utilisateurs
-
-    return nearby
+    result = []
+    async for user in nearby:
+        user["_id"] = str(user["_id"])
+        result.append(user)
+    return result
 
 # -------------------
 # Likes & Matches
